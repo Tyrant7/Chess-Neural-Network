@@ -41,8 +41,16 @@ class ChessDataset(Dataset):
 
         # Capture the game's score from the end of the fen
         label = re.search(r"\[(\d\.\d)]", fen).group(1)
+        label_tensor = torch.zeros(2, dtype=torch.float)
+        if label == "1.0":
+            label_tensor[0] = 1
+        elif label == "0.0":
+            label_tensor[1] = 1
+        else:
+            label_tensor[0] = 0.5
+            label_tensor[1] = 0.5
 
-        return data, float(label)
+        return data, label_tensor
 
 
 class ChessNetwork(nn.Module):
@@ -68,8 +76,7 @@ def train_loop(dataloader, model, device, loss_fn, optimizer):
     model.train()
     size = len(dataloader.dataset)
     for batch, (x, y) in enumerate(dataloader):
-        x = x.to(device)
-        y = y.to(device)
+        x, y = x.to(device), y.to(device)
 
         # Forward pass
         y_pred = model(x)
@@ -93,6 +100,8 @@ def test_loop(dataloader, model, device, loss_fn):
     test_loss, correct = 0, 0
     with torch.no_grad():
         for x, y in dataloader:
+            x, y = x.to(device), y.to(device)
+
             y_pred = model(x)
             test_loss += loss_fn(y_pred, y).item()
             correct += (y_pred.argmax(1) == y).sum().item()
