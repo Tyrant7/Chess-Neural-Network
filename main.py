@@ -19,19 +19,18 @@ class ChessDataset(Dataset):
     def __getitem__(self, idx):
         fen = self.fens[idx]
 
+        parts = fen.split(" ")
+        board, score = parts[0], parts[-1]
+
         # Generate a 3D tensor for each board representation where a 1 represents a piece in that position
         # The 3D input data can take advantage of preserving pieces' spacial positions on the board through a CNN
         # (width, height, pieceType)
         data = torch.zeros((piece_count * 2, 8, 8), dtype=torch.float)
         x, y = 0, 0
-        for c in fen:
-            # A space marks the end of the board representation of the fen
-            if c == " ":
-                break
+        for c in board:
             if c.isalpha():
                 colour_offset = 0 if c.isupper() else piece_count
-                piece_idx = piece_map[c.lower()]
-                data[piece_idx + colour_offset, y, x] = 1
+                data[piece_map[c.lower()] + colour_offset, y, x] = 1
                 x += 1
             elif c.isdigit():
                 x += int(c)
@@ -40,16 +39,12 @@ class ChessDataset(Dataset):
                 x = 0
 
         # Capture the game's score from the end of the fen
-        label = re.search(r"\[(\d\.\d)]", fen).group(1)
-        label_tensor = torch.zeros(2, dtype=torch.float)
-        if label == "1.0":
-            label_tensor[0] = 1
-        elif label == "0.0":
-            label_tensor[1] = 1
-        else:
-            label_tensor[0] = 0.5
-            label_tensor[1] = 0.5
-
+        # Remove brackets
+        label = score[1:-1]
+        label_tensor = torch.tensor(
+            [1.0, 0.0] if label == "1.0" else [0.0, 1.0] if label == "0.0" else [0.5, 0.5],
+            dtype=torch.float
+        )
         return data, label_tensor
 
 
