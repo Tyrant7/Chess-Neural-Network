@@ -1,5 +1,6 @@
 import torch
 import re
+import timeit
 from torch.utils.data import (DataLoader, Dataset)
 from torch import nn
 
@@ -63,7 +64,7 @@ class ChessNetwork(nn.Module):
         return self.model(x)
 
 
-def train(dataloader, model, device, loss_fn, optimizer):
+def train_loop(dataloader, model, device, loss_fn, optimizer):
     model.train()
     size = len(dataloader.dataset)
     for batch, (x, y) in enumerate(dataloader):
@@ -102,9 +103,26 @@ def test_loop(dataloader, model, device, loss_fn):
 
 
 if __name__ == '__main__':
+    LEARNING_RATE = 1e-3
+    EPOCHS = 5
+    BATCH_SIZE = 32
+
+    device = torch.accelerator.current_accelerator() if torch.accelerator.is_available() else "cpu"
+
     data_path = "data/lichess-big3-resolved.book"
     dataset = ChessDataset(data_path)
 
-    dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 
-    model = ChessNetwork()
+    model = ChessNetwork().to(device)
+
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE)
+
+    start_time = timeit.default_timer()
+    print(f"Beginning training on device: {device}")
+    for t in range(EPOCHS):
+        print(f"Epoch {t + 1}\n---------------------------")
+        train_loop(dataloader, model, device, loss_fn, optimizer)
+        test_loop(dataloader, model, device, loss_fn)
+    print(f"Completed training in {((timeit.default_timer() - start_time) * 1000):>.0f} ms")
