@@ -56,11 +56,49 @@ class ChessNetwork(nn.Module):
             nn.ReLU(),
             # (batch_size, 128, 4, 4) -> (batch_size, 2048)
             nn.Flatten(),
-            nn.Linear(128*4*4, 1),
+            nn.Linear(128*4*4, 2),
         )
 
     def forward(self, x):
         return self.model(x)
+
+
+def train(dataloader, model, device, loss_fn, optimizer):
+    model.train()
+    size = len(dataloader.dataset)
+    for batch, (x, y) in enumerate(dataloader):
+        x = x.to(device)
+        y = y.to(device)
+
+        # Forward pass
+        y_pred = model(x)
+        loss = loss_fn(y_pred, y)
+
+        # Backpropagation
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+
+        # Printout
+        if batch % 100 == 0:
+            loss, current = loss.item(), batch * dataloader.batch_size + len(x)
+            print(f"Loss {loss:>7f} [{current:>6d}/{size:>6d}]")
+
+
+def test_loop(dataloader, model, device, loss_fn):
+    model.eval()
+    size = len(dataloader.dataset)
+    num_batches = len(dataloader)
+    test_loss, correct = 0, 0
+    with torch.no_grad():
+        for x, y in dataloader:
+            y_pred = model(x)
+            test_loss += loss_fn(y_pred, y).item()
+            correct += (y_pred.argmax(1) == y).sum().item()
+
+    test_loss /= num_batches
+    correct /= size
+    print(f"Test Error: \nAccuracy: {(100 * correct):>0.1f}%, Avg loss: {test_loss:>7f}\n")
 
 
 if __name__ == '__main__':
@@ -69,9 +107,4 @@ if __name__ == '__main__':
 
     dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-    data, label = next(iter(dataloader))
-    print(data, label)
-
     model = ChessNetwork()
-    output = model(data)
-    print(output)
