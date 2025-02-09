@@ -7,6 +7,7 @@ from torch import nn
 piece_map = {c: i for i, c in enumerate("pnbrqk")}
 piece_count = len(piece_map)
 
+
 class ChessDataset(Dataset):
     def __init__(self, file_path, train):
         self.file_path = file_path
@@ -53,16 +54,30 @@ class ChessNetwork(nn.Module):
     def __init__(self):
         super().__init__()
         self.model = nn.Sequential(
-            # (batch_size, 12, 8, 8) -> (batch_size, 32, 6, 6)
-            nn.Conv2d(piece_count * 2, 32, kernel_size=3),
+            # (batch_size, 12, 8, 8) -> (batch_size, 32, 8, 8)
+            nn.Conv2d(piece_count * 2, 32, kernel_size=3, padding=1),
+            # Batch norm won't change the size, but it can help stabilize learning
+            nn.BatchNorm2d(32),
             nn.ReLU(),
-            # (batch_size, 32, 6, 6) -> (batch_size, 128, 4, 4)
-            nn.Conv2d(32, 128, kernel_size=3),
+
+            # (batch_size, 32, 8, 8) -> (batch_size, 64, 4, 4)
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(64),
             nn.ReLU(),
+
+            # (batch_size, 64, 4, 4) -> (batch_size, 128, 4, 4)
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+
             # (batch_size, 128, 4, 4) -> (batch_size, 2048)
             nn.Flatten(),
+
+            # (batch_size, 2048) -> (batch_size, 1024)
+            nn.Linear(128 * 4 * 4, 512),
+            nn.ReLU(),
             # Output probabilities = (win, loss, draw)
-            nn.Linear(128*4*4, 3),
+            nn.Linear(512, 3),
         )
 
     def forward(self, x):
@@ -109,8 +124,8 @@ def test_loop(dataloader, model, device, loss_fn):
 
 
 if __name__ == '__main__':
-    LEARNING_RATE = 1e-3
-    EPOCHS = 1
+    LEARNING_RATE = 1e-4
+    EPOCHS = 5
     BATCH_SIZE = 32
 
     device = torch.accelerator.current_accelerator() if torch.accelerator.is_available() else "cpu"
