@@ -39,11 +39,10 @@ class ChessDataset(Dataset):
                 x = 0
 
         # Capture the game's score from the end of the fen
-        # Remove brackets
-        label = score[1:-1]
+        # Remove brackets and newline
+        label = score[1:-2]
         label_tensor = torch.tensor(
-            [1.0, 0.0] if label == "1.0" else [0.0, 1.0] if label == "0.0" else [0.5, 0.5],
-            dtype=torch.float
+            0 if label == "1.0" else 1 if label == "0.0" else 2
         )
         return data, label_tensor
 
@@ -60,7 +59,8 @@ class ChessNetwork(nn.Module):
             nn.ReLU(),
             # (batch_size, 128, 4, 4) -> (batch_size, 2048)
             nn.Flatten(),
-            nn.Linear(128*4*4, 2),
+            # Output probabilities = (win, loss, draw)
+            nn.Linear(128*4*4, 3),
         )
 
     def forward(self, x):
@@ -85,7 +85,7 @@ def train_loop(dataloader, model, device, loss_fn, optimizer):
         # Printout
         if batch % 100 == 0:
             loss, current = loss.item(), batch * dataloader.batch_size + len(x)
-            print(f"Loss {loss:>7f} [{current:>6d}/{size:>6d}]")
+            print(f"Loss {loss:>7f} [{current:>7d}/{size:>7d}]")
 
 
 def test_loop(dataloader, model, device, loss_fn):
@@ -108,7 +108,7 @@ def test_loop(dataloader, model, device, loss_fn):
 
 if __name__ == '__main__':
     LEARNING_RATE = 1e-3
-    EPOCHS = 5
+    EPOCHS = 1
     BATCH_SIZE = 32
 
     device = torch.accelerator.current_accelerator() if torch.accelerator.is_available() else "cpu"
