@@ -8,10 +8,12 @@ piece_map = {c: i for i, c in enumerate("pnbrqk")}
 piece_count = len(piece_map)
 
 class ChessDataset(Dataset):
-    def __init__(self, file_path):
+    def __init__(self, file_path, train):
         self.file_path = file_path
         with open(file_path, "r") as file:
-            self.fens = file.readlines()
+            fens = file.readlines()
+            train_test_split = 0.8 * len(fens)
+            self.fens = fens[:train_test_split] if train else fens[train_test_split:]
 
     def __len__(self):
         return len(self.fens)
@@ -114,9 +116,11 @@ if __name__ == '__main__':
     device = torch.accelerator.current_accelerator() if torch.accelerator.is_available() else "cpu"
 
     data_path = "data/lichess-big3-resolved.book"
-    dataset = ChessDataset(data_path)
+    train_dataset = ChessDataset(data_path, True)
+    test_dataset = ChessDataset(data_path, False)
 
-    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
     model = ChessNetwork().to(device)
 
@@ -127,6 +131,6 @@ if __name__ == '__main__':
     print(f"Beginning training on device: {device}")
     for t in range(EPOCHS):
         print(f"Epoch {t + 1}\n---------------------------")
-        train_loop(dataloader, model, device, loss_fn, optimizer)
-        test_loop(dataloader, model, device, loss_fn)
+        train_loop(train_dataloader, model, device, loss_fn, optimizer)
+        test_loop(test_dataloader, model, device, loss_fn)
     print(f"Completed training in {((timeit.default_timer() - start_time) * 1000):>.0f} ms")
