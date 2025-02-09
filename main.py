@@ -12,7 +12,7 @@ class ChessDataset(Dataset):
     def __init__(self, file_path, train):
         self.file_path = file_path
         with open(file_path, "r") as file:
-            fens = file.readlines()
+            fens = file.readlines()[:10000]
             train_test_split = int(len(fens) * 0.8)
             self.fens = fens[:train_test_split] if train else fens[train_test_split:]
 
@@ -120,20 +120,20 @@ def test_loop(dataloader, model, device, loss_fn):
 
     test_loss /= num_batches
     correct /= size
-    print(f"Test Error: \nAccuracy: {(100 * correct):>0.1f}%, Avg loss: {test_loss:>7f}\n")
+    print(f"Test Error: \nAccuracy: {(100 * correct):>0.1f}%, Avg loss: {test_loss:>7f}")
 
 
 if __name__ == '__main__':
     LEARNING_RATE = 1e-4
-    EPOCHS = 5
-    BATCH_SIZE = 32
+    EPOCHS = 10
+    BATCH_SIZE = 64
 
     device = torch.accelerator.current_accelerator() if torch.accelerator.is_available() else "cpu"
     model_path = "networks/model_0.pt"
 
     data_path = "data/lichess-big3-resolved.book"
     train_dataset = ChessDataset(data_path, True)
-    test_dataset = ChessDataset(data_path, False)
+    test_dataset = ChessDataset(data_path, True)
 
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
@@ -146,11 +146,11 @@ if __name__ == '__main__':
     start_time = timeit.default_timer()
     print(f"Beginning training on device: {device}")
     for t in range(EPOCHS):
-        print(f"Epoch {t + 1}\n---------------------------")
+        print(f"Epoch {t + 1}\n-------------------------------")
         train_loop(train_dataloader, model, device, loss_fn, optimizer)
         test_loop(test_dataloader, model, device, loss_fn)
 
-        print(f"Saving network state dict to {model_path}")
+        print(f"Saving network state dict to {model_path}\n")
         torch.save(model.state_dict(), model_path)
 
     print(f"Completed training in {((timeit.default_timer() - start_time) * 1000):>.0f} ms")
