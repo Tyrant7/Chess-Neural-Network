@@ -12,7 +12,7 @@ class ChessDataset(Dataset):
         self.file_path = file_path
         with open(file_path, "r") as file:
             fens = file.readlines()
-            train_test_split = 0.8 * len(fens)
+            train_test_split = int(len(fens) * 0.8)
             self.fens = fens[:train_test_split] if train else fens[train_test_split:]
 
     def __len__(self):
