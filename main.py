@@ -129,6 +129,7 @@ if __name__ == '__main__':
     BATCH_SIZE = 32
 
     device = torch.accelerator.current_accelerator() if torch.accelerator.is_available() else "cpu"
+    model_path = "networks/model_0.pt"
 
     data_path = "data/lichess-big3-resolved.book"
     train_dataset = ChessDataset(data_path, True)
@@ -148,4 +149,8 @@ if __name__ == '__main__':
         print(f"Epoch {t + 1}\n---------------------------")
         train_loop(train_dataloader, model, device, loss_fn, optimizer)
         test_loop(test_dataloader, model, device, loss_fn)
+
+        print(f"Saving network state dict to {model_path}")
+        torch.save(model.state_dict(), model_path)
+
     print(f"Completed training in {((timeit.default_timer() - start_time) * 1000):>.0f} ms")
