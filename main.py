@@ -1,3 +1,5 @@
+import json
+
 import torch
 import re
 import timeit
@@ -12,7 +14,7 @@ class ChessDataset(Dataset):
     def __init__(self, file_path, train):
         self.file_path = file_path
         with open(file_path, "r") as file:
-            fens = file.readlines()[:10000]
+            fens = file.readlines()
             train_test_split = int(len(fens) * 0.8)
             self.fens = fens[:train_test_split] if train else fens[train_test_split:]
 
@@ -60,13 +62,13 @@ class ChessNetwork(nn.Module):
             nn.BatchNorm2d(32),
             nn.ReLU(),
 
-            # (batch_size, 32, 8, 8) -> (batch_size, 64, 4, 4)
-            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
+            # (batch_size, 32, 8, 8) -> (batch_size, 64, 8, 8)
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
             nn.BatchNorm2d(64),
             nn.ReLU(),
 
-            # (batch_size, 64, 4, 4) -> (batch_size, 128, 4, 4)
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            # (batch_size, 64, 8, 8) -> (batch_size, 128, 4, 4)
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
             nn.BatchNorm2d(128),
             nn.ReLU(),
 
@@ -76,7 +78,6 @@ class ChessNetwork(nn.Module):
             # (batch_size, 2048) -> (batch_size, 1024)
             nn.Linear(128 * 4 * 4, 512),
             nn.ReLU(),
-            # Output probabilities = (win, loss, draw)
             nn.Linear(512, 3),
         )
 
@@ -109,23 +110,25 @@ def test_loop(dataloader, model, device, loss_fn):
     model.eval()
     size = len(dataloader.dataset)
     num_batches = len(dataloader)
-    test_loss, correct = 0, 0
+    test_loss, accuracy = 0, 0
     with torch.no_grad():
         for x, y in dataloader:
             x, y = x.to(device), y.to(device)
 
             y_pred = model(x)
             test_loss += loss_fn(y_pred, y).item()
-            correct += (y_pred.argmax(1) == y).sum().item()
+            accuracy += (y_pred.argmax(1) == y).sum().item()
 
     test_loss /= num_batches
-    correct /= size
-    print(f"Test Error: \nAccuracy: {(100 * correct):>0.1f}%, Avg loss: {test_loss:>7f}")
+    accuracy /= size
+    print(f"Test results: \nAccuracy: {(accuracy * 100):>0.1f}%, Avg Loss: {test_loss:>7f}")
+    with open("accuracies.txt", "a") as f:
+        f.write(str(accuracy))
 
 
 if __name__ == '__main__':
     LEARNING_RATE = 1e-4
-    EPOCHS = 10
+    EPOCHS = 50
     BATCH_SIZE = 64
 
     device = torch.accelerator.current_accelerator() if torch.accelerator.is_available() else "cpu"
@@ -133,7 +136,7 @@ if __name__ == '__main__':
 
     data_path = "data/lichess-big3-resolved.book"
     train_dataset = ChessDataset(data_path, True)
-    test_dataset = ChessDataset(data_path, True)
+    test_dataset = ChessDataset(data_path, False)
 
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
