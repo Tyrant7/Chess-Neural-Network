@@ -24,8 +24,17 @@ class ChessDataset(Dataset):
     def __getitem__(self, idx):
         fen = self.fens[idx]
 
+        # TODO: Test data argumentation
+        # Flip boards horizontally
+        # And flip boards vertically + piece colours + winner label
+        # Diagonal flips when no pawns present for either side
+
+        # TODO: Include separate plains for castling rights and 50 move counter and other info
+
+        # We're going to encode the game from who ever is the side to move's perspective
         parts = fen.split(" ")
-        board, score = parts[0], parts[-1]
+        board, side_to_move, score = parts[0], parts[-6], parts[-1]
+        white_to_move = side_to_move == "w"
 
         # Generate a 3D tensor for each board representation where a 1 represents a piece in that position
         # The 3D input data can take advantage of preserving pieces' spacial positions on the board through a CNN
@@ -34,8 +43,12 @@ class ChessDataset(Dataset):
         x, y = 0, 0
         for c in board:
             if c.isalpha():
-                colour_offset = 0 if c.isupper() else piece_count
-                data[piece_map[c.lower()] + colour_offset, y, x] = 1
+                if white_to_move:
+                    colour_offset = 0 if c.isupper() else piece_count
+                else:
+                    colour_offset = piece_count if c.isupper() else 0
+                y_offset = y if white_to_move else 7 - y
+                data[piece_map[c.lower()] + colour_offset, y_offset, x] = 1
                 x += 1
             elif c.isdigit():
                 x += int(c)
@@ -46,9 +59,14 @@ class ChessDataset(Dataset):
         # Capture the game's score from the end of the fen
         # Remove brackets and newline
         label = score[1:-2]
-        label_tensor = torch.tensor(
-            0 if label == "1.0" else 1 if label == "0.0" else 2
-        )
+        if white_to_move:
+            label_tensor = torch.tensor(
+                0 if label == "1.0" else 1 if label == "0.0" else 2
+            )
+        else:
+            label_tensor = torch.tensor(
+                1 if label == "1.0" else 0 if label == "0.0" else 2
+            )
         return data, label_tensor
 
 
@@ -78,6 +96,7 @@ class ChessNetwork(nn.Module):
             # (batch_size, 2048) -> (batch_size, 1024)
             nn.Linear(128 * 4 * 4, 512),
             nn.ReLU(),
+            # Output -> (win, loss, draw)
             nn.Linear(512, 3),
         )
 
@@ -129,7 +148,7 @@ def test_loop(dataloader, model, device, loss_fn):
 if __name__ == '__main__':
     LEARNING_RATE = 1e-4
     EPOCHS = 50
-    BATCH_SIZE = 1024
+    BATCH_SIZE = 1
 
     device = torch.accelerator.current_accelerator() if torch.accelerator.is_available() else "cpu"
     model_path = "networks/model_0.pt"
