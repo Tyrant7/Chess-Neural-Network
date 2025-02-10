@@ -96,6 +96,7 @@ class ChessNetwork(nn.Module):
             # (batch_size, 2048) -> (batch_size, 1024)
             nn.Linear(128 * 4 * 4, 512),
             nn.ReLU(),
+            nn.Dropout(0.3),
             # Output -> (win, loss, draw)
             nn.Linear(512, 3),
         )
@@ -148,7 +149,7 @@ def test_loop(dataloader, model, device, loss_fn):
 if __name__ == '__main__':
     LEARNING_RATE = 1e-4
     EPOCHS = 50
-    BATCH_SIZE = 1
+    BATCH_SIZE = 1024
 
     device = torch.accelerator.current_accelerator() if torch.accelerator.is_available() else "cpu"
     model_path = "networks/model_0.pt"
