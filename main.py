@@ -129,7 +129,7 @@ def test_loop(dataloader, model, device, loss_fn):
 if __name__ == '__main__':
     LEARNING_RATE = 1e-4
     EPOCHS = 50
-    BATCH_SIZE = 64
+    BATCH_SIZE = 1024
 
     device = torch.accelerator.current_accelerator() if torch.accelerator.is_available() else "cpu"
     model_path = "networks/model_0.pt"
@@ -138,13 +138,14 @@ if __name__ == '__main__':
     train_dataset = ChessDataset(data_path, True)
     test_dataset = ChessDataset(data_path, False)
 
-    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
+    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
+    test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
 
     model = ChessNetwork().to(device)
 
     loss_fn = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE)
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
 
     start_time = timeit.default_timer()
     print(f"Beginning training on device: {device}")
@@ -152,6 +153,7 @@ if __name__ == '__main__':
         print(f"Epoch {t + 1}\n-------------------------------")
         train_loop(train_dataloader, model, device, loss_fn, optimizer)
         test_loop(test_dataloader, model, device, loss_fn)
+        scheduler.step()
 
         print(f"Saving network state dict to {model_path}\n")
         torch.save(model.state_dict(), model_path)
