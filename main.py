@@ -1,7 +1,5 @@
-import json
-
 import torch
-import re
+import random
 import timeit
 from torch.utils.data import (DataLoader, Dataset)
 from torch import nn
@@ -11,8 +9,9 @@ piece_count = len(piece_map)
 
 
 class ChessDataset(Dataset):
-    def __init__(self, file_path, train):
+    def __init__(self, file_path, train=True, allow_data_augmentation=False):
         self.file_path = file_path
+        self.allow_data_augmentation = allow_data_augmentation
         with open(file_path, "r") as file:
             fens = file.readlines()
             train_test_split = int(len(fens) * 0.8)
@@ -25,7 +24,6 @@ class ChessDataset(Dataset):
         fen = self.fens[idx]
 
         # TODO: Test data argumentation
-        # Flip boards horizontally
         # And flip boards vertically + piece colours + winner label
         # Diagonal flips when no pawns present for either side
 
@@ -33,8 +31,11 @@ class ChessDataset(Dataset):
 
         # We're going to encode the game from who ever is the side to move's perspective
         parts = fen.split(" ")
-        board, side_to_move, score = parts[0], parts[-6], parts[-1]
+        board, side_to_move, castling_rights, score = parts[0], parts[1], parts[2], parts[-1]
         white_to_move = side_to_move == "w"
+        horizontal_flip = (castling_rights == "-" and
+                           self.allow_data_augmentation and
+                           random.random() < 0.5)
 
         # Generate a 3D tensor for each board representation where a 1 represents a piece in that position
         # The 3D input data can take advantage of preserving pieces' spacial positions on the board through a CNN
@@ -48,7 +49,8 @@ class ChessDataset(Dataset):
                 else:
                     colour_offset = piece_count if c.isupper() else 0
                 y_offset = y if white_to_move else 7 - y
-                data[piece_map[c.lower()] + colour_offset, y_offset, x] = 1
+                x_offset = 7 - x if horizontal_flip else x
+                data[piece_map[c.lower()] + colour_offset, y_offset, x_offset] = 1
                 x += 1
             elif c.isdigit():
                 x += int(c)
@@ -155,8 +157,8 @@ if __name__ == '__main__':
     model_path = "networks/model_0.pt"
 
     data_path = "data/lichess-big3-resolved.book"
-    train_dataset = ChessDataset(data_path, True)
-    test_dataset = ChessDataset(data_path, False)
+    train_dataset = ChessDataset(data_path, True, True)
+    test_dataset = ChessDataset(data_path, False, True)
 
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
     test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
