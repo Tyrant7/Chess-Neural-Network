@@ -73,42 +73,40 @@ class ChessDataset(Dataset):
 
 
 class ChessNetwork(nn.Module):
-    def __init__(self):
+    def __init__(self, residual_layer_count=4):
         super().__init__()
 
         # (batch_size, 12, 8, 8) -> (batch_size, 128, 8, 8)
         self.conv1 = nn.Sequential(
-            nn.Conv2d(piece_count * 2, 128, kernel_size=3, padding=1),
+            nn.Conv2d(piece_count * 2, 256, kernel_size=3, padding=1),
             # Batch norm won't change the size, but it can help stabilize learning
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-        )
-
-        # (batch_size, 128, 8, 8) -> (batch_size, 128, 8, 8)
-        self.conv2 = nn.Sequential(
-            nn.Conv2d(128, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-        )
-
-        # (batch_size, 128, 8, 8) -> (batch_size, 128, 8, 8)
-        self.conv3 = nn.Sequential(
-            nn.Conv2d(128, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-        )
-
-        # (batch_size, 128, 8, 8) -> (batch_size, 128, 4, 4)
-        self.conv4 = nn.Sequential(
-            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1),
             nn.BatchNorm2d(256),
             nn.ReLU(),
         )
 
-        # (batch_size, 256, 4, 4) -> (batch_size, 4096)
-        self.flat = nn.Flatten()
+        # Residual blocks will retain input dimensions
+        # (batch_size, 128, 8, 8) -> (batch_size, 128, 8, 8)
+        self.residual_blocks = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(256, 256, kernel_size=3, padding=1),
+                nn.BatchNorm2d(256),
+            ) for _ in range(residual_layer_count)
+        ])
 
-        # (batch_size, 4096) -> (batch_size, 512)
+        # (batch_size, 128, 8, 8) -> (batch_size, 128, 4, 4)
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(256, 512, kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(512),
+            nn.ReLU(),
+        )
+
+        # (batch_size, 512, 4, 4) -> (batch_size, 8192)
+        self.flat = nn.Flatten()
+        self.relu = nn.ReLU()
+
+        # (batch_size, 8192) -> (batch_size, 512)
         self.fc = nn.Sequential(
-            nn.Linear(256 * 4 * 4, 512),
+            nn.Linear(512 * 4 * 4, 512),
             nn.ReLU(),
             nn.Dropout(0.3),
             # Output -> (win, loss, draw)
@@ -119,19 +117,15 @@ class ChessNetwork(nn.Module):
         # Input convolution
         x = self.conv1(x)
 
-        # 2 residual blocks
-        residual = x
-        x = self.conv2(x) + residual
-        # We should be sure to apply ReLU after our residuals to avoid
-        # negatives leaking through our layers
-        x = nn.ReLU()(x)
-
-        residual = x
-        x = self.conv3(x) + residual
-        x = nn.ReLU()(x)
+        # All of our residual blocks
+        for residual_block in self.residual_blocks:
+            x = residual_block(x) + x
+            # We should be sure to apply ReLU after our residuals to avoid
+            # negatives leaking through our layers
+            x = self.relu(x)
 
         # Down-sampling (no residual connected)
-        x = self.conv4(x)
+        x = self.conv2(x)
 
         # Flatten and fully-connected layer
         return self.fc(self.flat(x))
