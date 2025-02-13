@@ -72,6 +72,31 @@ class ChessDataset(Dataset):
         return data, label_tensor
 
 
+class ResidualBlock(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(channels)
+        self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(channels)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        residual = x
+
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x += residual
+
+        # Apply activation function at the end to prevent negatives
+        # from leaking through after restoring residual
+        return self.relu(x)
+
+
 class ChessNetwork(nn.Module):
     def __init__(self, residual_layer_count=4):
         super().__init__()
@@ -87,10 +112,7 @@ class ChessNetwork(nn.Module):
         # Residual blocks will retain input dimensions
         # (batch_size, 128, 8, 8) -> (batch_size, 128, 8, 8)
         self.residual_blocks = nn.ModuleList([
-            nn.Sequential(
-                nn.Conv2d(256, 256, kernel_size=3, padding=1),
-                nn.BatchNorm2d(256),
-            ) for _ in range(residual_layer_count)
+            ResidualBlock(256) for _ in range(residual_layer_count)
         ])
 
         # (batch_size, 128, 8, 8) -> (batch_size, 128, 4, 4)
@@ -119,10 +141,7 @@ class ChessNetwork(nn.Module):
 
         # All of our residual blocks
         for residual_block in self.residual_blocks:
-            x = residual_block(x) + x
-            # We should be sure to apply ReLU after our residuals to avoid
-            # negatives leaking through our layers
-            x = self.relu(x)
+            x = residual_block(x)
 
         # Down-sampling (no residual connected)
         x = self.conv2(x)
