@@ -250,3 +250,4 @@ fabric.properties
 
 # Ignore large data files
 data/*
+networks/*
