@@ -23,7 +23,7 @@ class ChessDataset(Dataset):
     def __getitem__(self, idx):
         fen = self.fens[idx]
 
-        # TODO: Test data argumentation
+        # TODO: More data argumentation
         # And flip boards vertically + piece colours + winner label
         # Diagonal flips when no pawns present for either side
 
@@ -72,6 +72,9 @@ class ChessDataset(Dataset):
         return data, label_tensor
 
 
+# TODO: Experiment with bottleneck residual blocks design (i.e. retaining input and output size, with a third,
+# inner layer with a reduced number of features
+# https://medium.com/@neetu.sigger/a-comprehensive-guide-to-understanding-and-implementing-bottleneck-residual-blocks-6b420706f66b
 class ResidualBlock(nn.Module):
     def __init__(self, channels):
         super().__init__()
@@ -123,6 +126,7 @@ class ChessNetwork(nn.Module):
         )
 
         # (batch_size, 512, 4, 4) -> (batch_size, 8192)
+        # TODO: Experiment with global average pooling instead of only flattening data
         self.flat = nn.Flatten()
         self.relu = nn.ReLU()
 
@@ -206,11 +210,11 @@ if __name__ == '__main__':
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
     test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
 
-    model = ChessNetwork().to(device)
+    model = ChessNetwork(8).to(device)
 
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.1)
 
     start_time = timeit.default_timer()
     print(f"Beginning training on device: {device}")
